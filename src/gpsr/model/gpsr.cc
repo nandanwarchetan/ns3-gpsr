@@ -295,52 +295,58 @@ RoutingProtocol::SendPacketFromQueue (Ipv4Address dst)
   Ptr<MobilityModel> MM = m_ipv4->GetObject<MobilityModel> ();
   myPos.x = MM->GetPosition ().x;
   myPos.y = MM->GetPosition ().y;
+  Ipv4Address nextHop;
 
-  Vector dstPos = m_locationService->GetPosition (dst);
-  Ipv4Address nextHop = m_neighbors.BestNeighbor (dstPos, myPos);
-  if (nextHop == Ipv4Address::GetZero ())
+  if(m_neighbors.isNeighbour (dst))
     {
-      NS_LOG_LOGIC ("Fallback to recovery-mode. Packets to " << dst);
-      recovery = true;
+      nextHop = dst;
     }
-  if(recovery)
-    {
-
-      Vector Position;
-      Vector previousHop;
-      uint32_t updated;
-      
-      while(m_queue.Dequeue (dst, queueEntry))
-        {
-          Ptr<Packet> p = ConstCast<Packet> (queueEntry.GetPacket ());
-          UnicastForwardCallback ucb = queueEntry.GetUnicastForwardCallback ();
-          Ipv4Header header = queueEntry.GetIpv4Header ();
-
-          TypeHeader tHeader (GPSRTYPE_POS);
-          p->RemoveHeader (tHeader);
-          if (!tHeader.IsValid ())
-            {
-              NS_LOG_DEBUG ("GPSR message " << p->GetUid () << " with unknown type received: " << tHeader.Get () << ". Drop");
-              return false;     // drop
-            }
-          if (tHeader.Get () == GPSRTYPE_POS)
-            {
-              PositionHeader hdr;
-              p->RemoveHeader (hdr);
-              Position.x = hdr.GetDstPosx ();
-              Position.y = hdr.GetDstPosy ();
-              updated = hdr.GetUpdated (); 
-            }
-          
-          PositionHeader posHeader (Position.x, Position.y,  updated, myPos.x, myPos.y, (uint8_t) 1, Position.x, Position.y); 
-          p->AddHeader (posHeader); //enters in recovery with last edge from Dst
-          p->AddHeader (tHeader);
-          
-          RecoveryMode(dst, p, ucb, header);
-        }
-      return true;
-    }
-
+  else{
+    Vector dstPos = m_locationService->GetPosition (dst);
+    nextHop = m_neighbors.BestNeighbor (dstPos, myPos);
+    if (nextHop == Ipv4Address::GetZero ())
+      {
+        NS_LOG_LOGIC ("Fallback to recovery-mode. Packets to " << dst);
+        recovery = true;
+      }
+    if(recovery)
+      {
+        
+        Vector Position;
+        Vector previousHop;
+        uint32_t updated;
+        
+        while(m_queue.Dequeue (dst, queueEntry))
+          {
+            Ptr<Packet> p = ConstCast<Packet> (queueEntry.GetPacket ());
+            UnicastForwardCallback ucb = queueEntry.GetUnicastForwardCallback ();
+            Ipv4Header header = queueEntry.GetIpv4Header ();
+            
+            TypeHeader tHeader (GPSRTYPE_POS);
+            p->RemoveHeader (tHeader);
+            if (!tHeader.IsValid ())
+              {
+                NS_LOG_DEBUG ("GPSR message " << p->GetUid () << " with unknown type received: " << tHeader.Get () << ". Drop");
+                return false;     // drop
+              }
+            if (tHeader.Get () == GPSRTYPE_POS)
+              {
+                PositionHeader hdr;
+                p->RemoveHeader (hdr);
+                Position.x = hdr.GetDstPosx ();
+                Position.y = hdr.GetDstPosy ();
+                updated = hdr.GetUpdated (); 
+              }
+            
+            PositionHeader posHeader (Position.x, Position.y,  updated, myPos.x, myPos.y, (uint8_t) 1, Position.x, Position.y); 
+            p->AddHeader (posHeader); //enters in recovery with last edge from Dst
+            p->AddHeader (tHeader);
+            
+            RecoveryMode(dst, p, ucb, header);
+          }
+        return true;
+      }
+  }
   Ptr<Ipv4Route> route = Create<Ipv4Route> ();
   route->SetDestination (dst);
   route->SetGateway (nextHop);
@@ -804,7 +810,16 @@ RoutingProtocol::AddHeaders (Ptr<Packet> p, Ipv4Address source, Ipv4Address dest
   myPos.x = MM->GetPosition ().x;
   myPos.y = MM->GetPosition ().y;  
  
-  Ipv4Address nextHop = m_neighbors.BestNeighbor (m_locationService->GetPosition (destination), myPos);
+  Ipv4Address nextHop;
+
+  if(m_neighbors.isNeighbour (destination))
+    {
+      nextHop = destination;
+    }
+  else
+    {
+      nextHop = m_neighbors.BestNeighbor (m_locationService->GetPosition (destination), myPos);
+    }
 
   uint16_t positionX = 0;
   uint16_t positionY = 0;
@@ -892,33 +907,42 @@ RoutingProtocol::Forwarding (Ptr<const Packet> packet, const Ipv4Header & header
     }
 
 
-  Ipv4Address nextHop = m_neighbors.BestNeighbor (Position, myPos);
-  if (nextHop != Ipv4Address::GetZero ())
+  Ipv4Address nextHop;
+
+  if(m_neighbors.isNeighbour (dst))
     {
-      PositionHeader posHeader (Position.x, Position.y,  updated, (uint64_t) 0, (uint64_t) 0, (uint8_t) 0, myPos.x, myPos.y);
-      p->AddHeader (posHeader);
-      p->AddHeader (tHeader);
-
-
-      Ptr<NetDevice> oif = m_ipv4->GetObject<NetDevice> ();
-      Ptr<Ipv4Route> route = Create<Ipv4Route> ();
-      route->SetDestination (dst);
-      route->SetSource (header.GetSource ());
-      route->SetGateway (nextHop);
-
-      // FIXME: Does not work for multiple interfaces
-      route->SetOutputDevice (m_ipv4->GetNetDevice (1));
-      route->SetDestination (header.GetDestination ());
-      NS_ASSERT (route != 0);
-      NS_LOG_DEBUG ("Exist route to " << route->GetDestination () << " from interface " << route->GetOutputDevice ());
-
-
-      NS_LOG_LOGIC (route->GetOutputDevice () << " forwarding to " << dst << " from " << origin << " through " << route->GetGateway () << " packet " << p->GetUid ());
-
-      ucb (route, p, header);
-      return true;
+      nextHop = dst;
     }
+  else
+    {
 
+      nextHop = m_neighbors.BestNeighbor (Position, myPos);
+      if (nextHop != Ipv4Address::GetZero ())
+        {
+          PositionHeader posHeader (Position.x, Position.y,  updated, (uint64_t) 0, (uint64_t) 0, (uint8_t) 0, myPos.x, myPos.y);
+          p->AddHeader (posHeader);
+          p->AddHeader (tHeader);
+          
+          
+          Ptr<NetDevice> oif = m_ipv4->GetObject<NetDevice> ();
+          Ptr<Ipv4Route> route = Create<Ipv4Route> ();
+          route->SetDestination (dst);
+          route->SetSource (header.GetSource ());
+          route->SetGateway (nextHop);
+          
+          // FIXME: Does not work for multiple interfaces
+          route->SetOutputDevice (m_ipv4->GetNetDevice (1));
+          route->SetDestination (header.GetDestination ());
+          NS_ASSERT (route != 0);
+          NS_LOG_DEBUG ("Exist route to " << route->GetDestination () << " from interface " << route->GetOutputDevice ());
+          
+          
+          NS_LOG_LOGIC (route->GetOutputDevice () << " forwarding to " << dst << " from " << origin << " through " << route->GetGateway () << " packet " << p->GetUid ());
+          
+          ucb (route, p, header);
+          return true;
+        }
+    }
   hdr.SetInRec(1);
   hdr.SetRecPosx (myPos.x);
   hdr.SetRecPosy (myPos.y); 
@@ -997,8 +1021,18 @@ RoutingProtocol::RouteOutput (Ptr<Packet> p, const Ipv4Header &header,
   myPos.x = MM->GetPosition ().x;
   myPos.y = MM->GetPosition ().y;  
 
-  m_neighbors.Purge (); 
-  Ipv4Address nextHop = m_neighbors.BestNeighbor (dstPos, myPos);
+
+  Ipv4Address nextHop;
+
+  if(m_neighbors.isNeighbour (dst))
+    {
+      nextHop = dst;
+    }
+  else
+    {
+      nextHop = m_neighbors.BestNeighbor (dstPos, myPos);
+    }
+
 
   if (nextHop != Ipv4Address::GetZero ())
     {

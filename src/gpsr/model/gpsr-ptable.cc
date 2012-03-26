@@ -80,6 +80,25 @@ PositionTable::GetPosition (Ipv4Address id)
 }
 
 /**
+ * \brief Checks if a node is a neighbour
+ * \param id Ipv4Address of the node to check
+ * \return True if the node is neighbour, false otherwise
+ */
+bool
+PositionTable::isNeighbour (Ipv4Address id)
+{
+
+ std::map<Ipv4Address, std::pair<Vector, Time> >::iterator i = m_table.find (id);
+  if (i != m_table.end () || id.IsEqual (i->first))
+    {
+      return true;
+    }
+
+  return false;
+}
+
+
+/**
  * \brief remove entries with expired lifetime
  */
 void 

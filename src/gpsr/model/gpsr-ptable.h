@@ -53,6 +53,13 @@ public:
   Vector GetPosition (Ipv4Address id);
 
   /**
+   * \brief Checks if a node is a neighbour
+   * \param id Ipv4Address of the node to check
+   * \return True if the node is neighbour, false otherwise
+   */
+  bool isNeighbour (Ipv4Address id);
+
+  /**
    * \brief remove entries with expired lifetime
    */
   void Purge ();
