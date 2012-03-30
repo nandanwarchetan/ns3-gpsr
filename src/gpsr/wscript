@@ -16,6 +16,12 @@ def build(bld):
         'helper/gpsr-helper.cc',
         ]
 
+    gpsr_test = bld.create_ns3_module_test_library('gpsr')
+    gpsr_test.source = [
+        'test/gpsr-test-suite.cc',
+        ]
+
+
     headers = bld.new_task_gen(features=['ns3header'])
     headers.module = 'gpsr'
     headers.source = [

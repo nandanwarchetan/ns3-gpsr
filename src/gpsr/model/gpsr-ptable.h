@@ -48,7 +48,7 @@ public:
   /**
    * \brief Gets position from position table
    * \param id Ipv4Address to get position from
-   * \return Position of that id or NULL if not known
+   * \return Position of that id or PositionTable::GetInvalidPosition () if not known
    */
   Vector GetPosition (Ipv4Address id);
 
@@ -79,8 +79,8 @@ public:
 
   /**
    * \brief Gets next hop according to GPSR protocol
-   * \param position the position of the node that has the packet
-   * \param nodePos the position of the destination node
+   * \param position the position of the destination node
+   * \param nodePos the position of the node that has the packet
    * \return Ipv4Address of the next hop, Ipv4Address::GetZero () if no nighbour was found in greedy mode
    */
   Ipv4Address BestNeighbor (Vector position, Vector nodePos);
